@@ -422,143 +422,158 @@
     </footer>
 
     <script>
-        // --- 1. CUSTOM CURSOR LOGIC ---
-        const cursorDot = document.querySelector('[data-cursor-dot]');
-        const cursorOutline = document.querySelector('[data-cursor-outline]');
-        const hoverElements = document.querySelectorAll('.on-hover');
+        (function () {
+            // --- 1. CUSTOM CURSOR LOGIC (defensive) ---
+            const cursorDot = document.querySelector('[data-cursor-dot]');
+            const cursorOutline = document.querySelector('[data-cursor-outline]');
+            const hoverElements = document.querySelectorAll('.on-hover');
 
-        window.addEventListener('mousemove', function (e) {
-            const posX = e.clientX;
-            const posY = e.clientY;
+            // Mouse move handler with fallbacks for environments without Element.animate
+            window.addEventListener('mousemove', function (e) {
+                const posX = e.clientX;
+                const posY = e.clientY;
 
-            // Dot follows instantly
-            cursorDot.style.left = `${posX}px`;
-            cursorDot.style.top = `${posY}px`;
+                // Dot follows instantly (if present)
+                if (cursorDot) {
+                    cursorDot.style.left = `${posX}px`;
+                    cursorDot.style.top = `${posY}px`;
+                }
 
-            // Outline follows with slight delay (animation in CSS usually handles smoothness, 
-            // but we use JS to update position keyframe for better performance)
-            cursorOutline.animate({
-                left: `${posX}px`,
-                top: `${posY}px`
-            }, { duration: 500, fill: "forwards" });
-        });
-
-        // Add hover effects to links/buttons
-        hoverElements.forEach(el => {
-            el.addEventListener('mouseenter', () => document.body.classList.add('hovering'));
-            el.addEventListener('mouseleave', () => document.body.classList.remove('hovering'));
-        });
-
-        // --- 2. SCROLL ANIMATIONS (Intersection Observer) ---
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('show');
+                // Outline: use Web Animations API if available otherwise set directly
+                if (cursorOutline) {
+                    if (typeof cursorOutline.animate === 'function') {
+                        // animate expects an array of keyframes; provide a start and end for smoother motion
+                        cursorOutline.animate([
+                            { left: cursorOutline.style.left || `${posX}px`, top: cursorOutline.style.top || `${posY}px` },
+                            { left: `${posX}px`, top: `${posY}px` }
+                        ], { duration: 300, fill: 'forwards', easing: 'ease-out' });
+                    } else {
+                        cursorOutline.style.left = `${posX}px`;
+                        cursorOutline.style.top = `${posY}px`;
+                    }
                 }
             });
-        }, { threshold: 0.1 });
 
-        const hiddenElements = document.querySelectorAll('.hidden');
-        hiddenElements.forEach((el) => observer.observe(el));
-
-
-        // --- 3. PARTICLE BACKGROUND (Canvas) ---
-        const canvas = document.getElementById('bg-canvas');
-        const ctx = canvas.getContext('2d');
-        
-        let particlesArray;
-
-        // Set canvas size
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        class Particle {
-            constructor(x, y, directionX, directionY, size, color) {
-                this.x = x;
-                this.y = y;
-                this.directionX = directionX;
-                this.directionY = directionY;
-                this.size = size;
-                this.color = color;
+            // Add hover effects to links/buttons (if any)
+            if (hoverElements && hoverElements.length) {
+                hoverElements.forEach(el => {
+                    el.addEventListener('mouseenter', () => document.body.classList.add('hovering'));
+                    el.addEventListener('mouseleave', () => document.body.classList.remove('hovering'));
+                });
             }
 
-            // Draw individual particle
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
-                ctx.fillStyle = this.color; // color
-                ctx.fill();
+            // --- 2. SCROLL ANIMATIONS (Intersection Observer) ---
+            const hiddenElements = document.querySelectorAll('.hidden');
+            if (hiddenElements && hiddenElements.length && 'IntersectionObserver' in window) {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('show');
+                        }
+                    });
+                }, { threshold: 0.1 });
+
+                hiddenElements.forEach((el) => observer.observe(el));
+            } else if (hiddenElements && hiddenElements.length) {
+                // Fallback: reveal all
+                hiddenElements.forEach((el) => el.classList.add('show'));
             }
 
-            // Update particle position
-            update() {
-                if (this.x > canvas.width || this.x < 0) {
-                    this.directionX = -this.directionX;
+            // --- 3. PARTICLE BACKGROUND (Canvas) ---
+            const canvas = document.getElementById('bg-canvas');
+            if (!canvas) return; // nothing more to do
+
+            const ctx = (canvas.getContext) ? canvas.getContext('2d') : null;
+            if (!ctx) return;
+
+            let particlesArray = [];
+
+            // Set canvas size helper
+            function setCanvasSize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+
+            setCanvasSize();
+
+            class Particle {
+                constructor(x, y, directionX, directionY, size, color) {
+                    this.x = x;
+                    this.y = y;
+                    this.directionX = directionX;
+                    this.directionY = directionY;
+                    this.size = size;
+                    this.color = color;
                 }
-                if (this.y > canvas.height || this.y < 0) {
-                    this.directionY = -this.directionY;
+
+                draw() {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
                 }
-                this.x += this.directionX;
-                this.y += this.directionY;
-                this.draw();
+
+                update() {
+                    if (this.x > canvas.width || this.x < 0) this.directionX = -this.directionX;
+                    if (this.y > canvas.height || this.y < 0) this.directionY = -this.directionY;
+                    this.x += this.directionX;
+                    this.y += this.directionY;
+                    this.draw();
+                }
             }
-        }
 
-        function init() {
-            particlesArray = [];
-            let numberOfParticles = (canvas.height * canvas.width) / 9000; // Density
-            for (let i = 0; i < numberOfParticles; i++) {
-                let size = (Math.random() * 2) + 1;
-                let x = (Math.random() * ((innerWidth - size * 2) - (size * 2)) + size * 2);
-                let y = (Math.random() * ((innerHeight - size * 2) - (size * 2)) + size * 2);
-                let directionX = (Math.random() * 2) - 1; // Speed
-                let directionY = (Math.random() * 2) - 1;
-                let color = '#00f3ff';
+            function init() {
+                particlesArray = [];
+                const numberOfParticles = Math.max(20, Math.floor((canvas.height * canvas.width) / 9000)); // keep a sensible minimum
+                for (let i = 0; i < numberOfParticles; i++) {
+                    const size = (Math.random() * 2) + 1;
+                    const x = (Math.random() * ((window.innerWidth - size * 4))) + size * 2;
+                    const y = (Math.random() * ((window.innerHeight - size * 4))) + size * 2;
+                    const directionX = (Math.random() * 2) - 1;
+                    const directionY = (Math.random() * 2) - 1;
+                    const color = '#00f3ff';
 
-                particlesArray.push(new Particle(x, y, directionX, directionY, size, color));
+                    particlesArray.push(new Particle(x, y, directionX, directionY, size, color));
+                }
             }
-        }
 
-        // Connect particles with lines if close enough
-        function connect() {
-            let opacityValue = 1;
-            for (let a = 0; a < particlesArray.length; a++) {
-                for (let b = a; b < particlesArray.length; b++) {
-                    let distance = ((particlesArray[a].x - particlesArray[b].x) * (particlesArray[a].x - particlesArray[b].x))
-                        + ((particlesArray[a].y - particlesArray[b].y) * (particlesArray[a].y - particlesArray[b].y));
-                    
-                    if (distance < (canvas.width/7) * (canvas.height/7)) {
-                        opacityValue = 1 - (distance / 20000);
-                        ctx.strokeStyle = 'rgba(0, 243, 255,' + opacityValue + ')';
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
-                        ctx.lineTo(particlesArray[b].x, particlesArray[b].y);
-                        ctx.stroke();
+            function connect() {
+                for (let a = 0; a < particlesArray.length; a++) {
+                    for (let b = a + 1; b < particlesArray.length; b++) {
+                        const dx = particlesArray[a].x - particlesArray[b].x;
+                        const dy = particlesArray[a].y - particlesArray[b].y;
+                        const distance = dx * dx + dy * dy;
+
+                        const maxDistance = (canvas.width / 7) * (canvas.height / 7);
+                        if (distance < maxDistance) {
+                            const opacityValue = Math.max(0, 1 - (distance / 20000));
+                            ctx.strokeStyle = `rgba(0, 243, 255, ${opacityValue})`;
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                            ctx.lineTo(particlesArray[b].x, particlesArray[b].y);
+                            ctx.stroke();
+                        }
                     }
                 }
             }
-        }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            ctx.clearRect(0, 0, innerWidth, innerHeight);
-            
-            for (let i = 0; i < particlesArray.length; i++) {
-                particlesArray[i].update();
+            function animate() {
+                requestAnimationFrame(animate);
+                ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+                for (let i = 0; i < particlesArray.length; i++) particlesArray[i].update();
+                connect();
             }
-            connect();
-        }
 
-        // Resize event
-        window.addEventListener('resize', () => {
-            canvas.width = innerWidth;
-            canvas.height = innerHeight;
+            window.addEventListener('resize', () => {
+                setCanvasSize();
+                init();
+            });
+
+            // Initialize and run
             init();
-        });
-
-        init();
-        animate();
+            animate();
+        })();
     </script>
 </body>
 </html>

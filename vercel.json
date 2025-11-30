@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "name": "holy",
+  "builds": [
+    { "src": "kingdom.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/kingdom.html" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}
